@@ -1,0 +1,21 @@
+[versions]
+kotlin = "2.1.0"
+milo = "1.1.5"
+coroutines = "1.9.0"
+slf4j = "2.0.16"
+logback = "1.5.12"
+testcontainers = "2.0.5"
+kotest = "6.2.2"
+
+[libraries]
+milo-sdk-client = { module = "org.eclipse.milo:milo-sdk-client", version.ref = "milo" }
+milo-sdk-server = { module = "org.eclipse.milo:milo-sdk-server", version.ref = "milo" }
+coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
+kotest-runner-junit5 = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
+kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
