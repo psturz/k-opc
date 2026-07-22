@@ -1,16 +1,24 @@
 package dev.psturz.kopc
 
 import java.security.Security
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.withContext
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.eclipse.milo.opcua.sdk.client.OpcUaClient as MiloClient
 import org.eclipse.milo.opcua.sdk.client.identity.AnonymousProvider
 import org.eclipse.milo.opcua.sdk.client.identity.IdentityProvider
 import org.eclipse.milo.opcua.sdk.client.identity.UsernameProvider
+import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaMonitoredItem
+import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaSubscription
 import org.eclipse.milo.opcua.stack.core.NodeIds
 import org.eclipse.milo.opcua.stack.core.security.SecurityPolicy
 import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue
-import org.eclipse.milo.opcua.stack.core.types.builtin.NodeId
+import org.eclipse.milo.opcua.stack.core.types.builtin.NodeId as MiloNodeId
 import org.eclipse.milo.opcua.stack.core.types.builtin.Variant
 import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.Unsigned.uint
 import org.eclipse.milo.opcua.stack.core.types.enumerated.BrowseDirection
@@ -28,6 +36,7 @@ class MiloOpcUaClient(
     private val password: String? = null,
 ) : OpcUaClient {
     private var client: MiloClient? = null
+    private val activeSubscriptions = CopyOnWriteArrayList<OpcUaSubscription>()
 
     companion object {
         init {
@@ -70,26 +79,55 @@ class MiloOpcUaClient(
     }
 
     override suspend fun disconnect() {
+        activeSubscriptions.forEach { runCatching { it.delete() } }
+        activeSubscriptions.clear()
         client?.disconnectAsync()?.await()
         client = null
     }
 
-    override suspend fun readValue(nodeId: String): OpcUaValue {
+    override suspend fun readValue(nodeId: NodeId): OpcUaValue = readValues(listOf(nodeId)).first()
+
+    override suspend fun readValues(nodeIds: List<NodeId>): List<OpcUaValue> {
         val miloClient = requireNotNull(client) { "Client not connected" }
-        val node = NodeId.parse(nodeId)
-        val dataValue = miloClient.readValuesAsync(0.0, TimestampsToReturn.Both, listOf(node)).await().first()
-        return dataValue.toOpcUaValue()
+        val nodes = nodeIds.map { MiloNodeId.parse(it.value) }
+        val dataValues = miloClient.readValuesAsync(0.0, TimestampsToReturn.Both, nodes).await()
+        return dataValues.map { it.toOpcUaValue() }
     }
 
-    override suspend fun writeValue(nodeId: String, value: Any) {
+    override fun monitor(nodeIds: List<NodeId>): Flow<OpcUaValueChange> = callbackFlow {
         val miloClient = requireNotNull(client) { "Client not connected" }
-        val node = NodeId.parse(nodeId)
+        val subscription = OpcUaSubscription(miloClient)
+
+        withContext(Dispatchers.IO) {
+            subscription.create()
+
+            val items = nodeIds.map { nodeId ->
+                OpcUaMonitoredItem.newDataItem(MiloNodeId.parse(nodeId.value)).also { item ->
+                    item.setDataValueListener { _, value ->
+                        trySend(OpcUaValueChange(nodeId, value.toOpcUaValue()))
+                    }
+                }
+            }
+            subscription.addMonitoredItems(items)
+            subscription.synchronizeMonitoredItems()
+        }
+        activeSubscriptions += subscription
+
+        awaitClose {
+            activeSubscriptions.remove(subscription)
+            runCatching { subscription.delete() }
+        }
+    }
+
+    override suspend fun writeValue(nodeId: NodeId, value: Any) {
+        val miloClient = requireNotNull(client) { "Client not connected" }
+        val node = MiloNodeId.parse(nodeId.value)
         miloClient.writeValuesAsync(listOf(node), listOf(DataValue(Variant(value)))).await()
     }
 
-    override suspend fun browse(nodeId: String): List<OpcUaNode> {
+    override suspend fun browse(nodeId: NodeId): List<OpcUaNode> {
         val miloClient = requireNotNull(client) { "Client not connected" }
-        val node = NodeId.parse(nodeId)
+        val node = MiloNodeId.parse(nodeId.value)
         val browseDescription = BrowseDescription(
             node,
             BrowseDirection.Forward,
@@ -101,7 +139,7 @@ class MiloOpcUaClient(
         val browseResult = miloClient.browseAsync(browseDescription).await()
         return (browseResult.references ?: emptyArray()).map { ref ->
             OpcUaNode(
-                nodeId = ref.nodeId.toParseableString(),
+                nodeId = NodeId(ref.nodeId.toParseableString()),
                 browseName = ref.browseName?.name ?: "",
                 displayName = ref.displayName?.text ?: "",
                 nodeClass = ref.nodeClass?.name ?: "Unknown",

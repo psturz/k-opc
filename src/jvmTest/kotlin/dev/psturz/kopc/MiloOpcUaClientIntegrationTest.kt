@@ -2,9 +2,14 @@ package dev.psturz.kopc
 
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.datatest.withData
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 import org.eclipse.milo.opcua.stack.core.security.SecurityPolicy
+import kotlin.time.Duration.Companion.milliseconds
 
 class MiloOpcUaClientIntegrationTest : FunSpec({
     val opcPlc = ProjectConfig.opcPlc
@@ -16,7 +21,7 @@ class MiloOpcUaClientIntegrationTest : FunSpec({
     test("reads the server current time after connecting") {
         client.connect()
 
-        val value = client.readValue("ns=0;i=2258")
+        val value = client.readValue(NodeId("ns=0;i=2258"))
 
         value.value.shouldNotBeNull()
     }
@@ -24,9 +29,29 @@ class MiloOpcUaClientIntegrationTest : FunSpec({
     test("browses the objects folder") {
         client.connect()
 
-        val nodes = client.browse("ns=0;i=85")
+        val nodes = client.browse(NodeId("ns=0;i=85"))
 
         nodes.shouldNotBeEmpty()
+    }
+
+    test("reads multiple values in a single batched request") {
+        client.connect()
+
+        val values = client.readValues(listOf(NodeId("ns=0;i=2258"), NodeId("ns=0;i=2255")))
+
+        values shouldHaveSize 2
+        values.forEach { it.value.shouldNotBeNull() }
+    }
+
+    test("receives a value change while monitoring the server current time") {
+        client.connect()
+
+        val change = withTimeout(5_000.milliseconds) {
+            client.monitor(listOf(NodeId("ns=0;i=2258"))).first()
+        }
+
+        change.nodeId shouldBe NodeId("ns=0;i=2258")
+        change.value.value.shouldNotBeNull()
     }
 
     test("reads a value over an explicit SecurityPolicy.None, anonymous connection") {
@@ -35,7 +60,7 @@ class MiloOpcUaClientIntegrationTest : FunSpec({
         )
         client.connect()
 
-        val value = client.readValue("ns=0;i=2258")
+        val value = client.readValue(NodeId("ns=0;i=2258"))
 
         value.value.shouldNotBeNull()
     }
@@ -55,7 +80,7 @@ class MiloOpcUaClientIntegrationTest : FunSpec({
             )
             client.connect()
 
-            val value = client.readValue("ns=0;i=2258")
+            val value = client.readValue(NodeId("ns=0;i=2258"))
 
             value.value.shouldNotBeNull()
         }
