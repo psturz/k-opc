@@ -34,6 +34,7 @@ kotlin {
             implementation(libs.milo.sdk.client)
             implementation(libs.milo.sdk.server)
             implementation(libs.slf4j.api)
+            implementation(libs.bouncycastle.provider)
             runtimeOnly(libs.logback.classic)
         }
         jvmTest.dependencies {

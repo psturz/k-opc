@@ -6,9 +6,11 @@ slf4j = "2.0.16"
 logback = "1.5.12"
 testcontainers = "2.0.5"
 kotest = "6.2.2"
+bouncycastle = "1.85"
 
 [libraries]
 milo-sdk-client = { module = "org.eclipse.milo:milo-sdk-client", version.ref = "milo" }
+bouncycastle-provider = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 milo-sdk-server = { module = "org.eclipse.milo:milo-sdk-server", version.ref = "milo" }
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
