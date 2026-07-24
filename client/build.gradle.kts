@@ -31,7 +31,10 @@ kotlin {
             implementation(libs.coroutines.core)
         }
         jvmMain.dependencies {
-            implementation(libs.milo.sdk.client)
+            // api, not implementation: MiloOpcUaClient's public constructor exposes Milo's
+            // SecurityPolicy type directly, so consumers (e.g. :server) need it on their
+            // own compile classpath too.
+            api(libs.milo.sdk.client)
             implementation(libs.milo.sdk.server)
             implementation(libs.slf4j.api)
             implementation(libs.bouncycastle.provider)

@@ -43,6 +43,15 @@ class MiloOpcUaClientIntegrationTest : FunSpec({
         values.forEach { it.value.shouldNotBeNull() }
     }
 
+    test("writes a value and reads it back") {
+        client.connect()
+        val nodeId = NodeId("ns=3;s=FastNumberOfUpdates")
+
+        client.writeValue(nodeId, 7)
+
+        client.readValue(nodeId).value shouldBe 7
+    }
+
     test("receives a value change while monitoring the server current time") {
         client.connect()
 

@@ -19,6 +19,7 @@ import org.eclipse.milo.opcua.stack.core.NodeIds
 import org.eclipse.milo.opcua.stack.core.security.SecurityPolicy
 import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue
 import org.eclipse.milo.opcua.stack.core.types.builtin.NodeId as MiloNodeId
+import org.eclipse.milo.opcua.stack.core.types.builtin.StatusCode
 import org.eclipse.milo.opcua.stack.core.types.builtin.Variant
 import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.Unsigned.uint
 import org.eclipse.milo.opcua.stack.core.types.enumerated.BrowseDirection
@@ -122,7 +123,13 @@ class MiloOpcUaClient(
     override suspend fun writeValue(nodeId: NodeId, value: Any) {
         val miloClient = requireNotNull(client) { "Client not connected" }
         val node = MiloNodeId.parse(nodeId.value)
-        miloClient.writeValuesAsync(listOf(node), listOf(DataValue(Variant(value)))).await()
+        // Only the Value attribute is broadly writable - most servers reject writes that also
+        // carry source/server timestamps (which DataValue(Variant) sets to "now" by default).
+        val dataValue = DataValue(Variant(value), StatusCode.GOOD, null, null, null, null)
+        val statusCode = miloClient.writeValuesAsync(listOf(node), listOf(dataValue)).await().first()
+        if (!statusCode.isGood) {
+            throw OpcUaException("Write to $nodeId failed: $statusCode")
+        }
     }
 
     override suspend fun browse(nodeId: NodeId): List<OpcUaNode> {
